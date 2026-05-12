@@ -132,13 +132,23 @@ def handle_all_messages(message):
 # 4. RUN BOT & AZURE WEB APP SERVER
 # ==========================================================
 import threading
-from flask import Flask
+from flask import Flask, render_template, request, jsonify
 
 app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "Mera Kanha Bot is running on Azure App Service!"
+    return render_template('index.html')
+
+@app.route('/api/chat', methods=['POST'])
+def chat_api():
+    data = request.json
+    user_message = data.get('message', '')
+    
+    # Use the same logic the Telegram bot uses
+    reply = ask_krishna(user_message)
+    
+    return jsonify({"answer": reply})
 
 def run_bot():
     print("Mera Kanha bot is now online and listening...")
