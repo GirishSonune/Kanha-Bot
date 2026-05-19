@@ -16,10 +16,29 @@ TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 AZURE_OPENAI_ENDPOINT = os.getenv("AZURE_OPENAI_ENDPOINT")
 AZURE_OPENAI_KEY = os.getenv("AZURE_OPENAI_KEY")
 
-# Azure AI Search Credentials (REQUIRED for RAG)
-SEARCH_ENDPOINT = os.getenv("SEARCH_ENDPOINT")
-SEARCH_KEY = os.getenv("SEARCH_KEY")
-SEARCH_INDEX_NAME = os.getenv("SEARCH_INDEX_NAME", "Gita-book")
+# Initialize ChromaDB Vector Database
+import chromadb
+chroma_client = chromadb.PersistentClient(path="./chroma_db")
+collection = chroma_client.get_or_create_collection(name="gita_wisdom")
+
+if collection.count() == 0:
+    print("Initializing Vector Database with Gita wisdom...")
+    try:
+        with open("krishna_dataset_fixed.jsonl", "r", encoding="utf-8") as f:
+            docs = []
+            ids = []
+            for i, line in enumerate(f):
+                if not line.strip(): continue
+                data = json.loads(line)
+                user_msg = data["messages"][0]["content"]
+                assistant_msg = data["messages"][1]["content"]
+                docs.append(f"Q: {user_msg}\nA: {assistant_msg}")
+                ids.append(str(i))
+            if docs:
+                collection.add(documents=docs, ids=ids)
+        print("Vector Database loaded successfully.")
+    except Exception as e:
+        print(f"Error loading Vector DB: {e}")
 
 bot = telebot.TeleBot(TELEGRAM_TOKEN)
 
@@ -27,28 +46,18 @@ bot = telebot.TeleBot(TELEGRAM_TOKEN)
 # 2. THE LOGIC
 # ==========================================================
 def ask_krishna(user_query):
-    # 1. MANUAL RAG: Search Azure Index Directly
-    search_url = f"{SEARCH_ENDPOINT}/indexes/{SEARCH_INDEX_NAME}/docs/search?api-version=2023-11-01"
-    search_headers = {
-        "Content-Type": "application/json",
-        "api-key": SEARCH_KEY
-    }
-    search_payload = {
-        "search": user_query,
-        "top": 3
-    }
-    
+    # 1. RAG: Search Local Vector Database
     context_text = ""
     try:
-        search_res = requests.post(search_url, headers=search_headers, json=search_payload)
-        if search_res.status_code == 200:
-            docs = search_res.json().get('value', [])
-            for i, doc in enumerate(docs):
-                # Try common text fields, fallback to dumping the document
-                text = doc.get('content') or doc.get('chunk') or doc.get('text') or str(doc)
-                context_text += f"\n[doc{i+1}]: {text}\n"
+        results = collection.query(
+            query_texts=[user_query],
+            n_results=3
+        )
+        if results and 'documents' in results and results['documents']:
+            for i, doc in enumerate(results['documents'][0]):
+                context_text += f"\n[doc{i+1}]: {doc}\n"
     except Exception as e:
-        print(f"Search Error: {e}")
+        print(f"Vector DB Search Error: {e}")
 
     # 2. CALL AZURE OPENAI DIRECTLY
     headers = {

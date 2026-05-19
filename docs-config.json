@@ -1,0 +1,10 @@
+{
+  "mode": "git-hook",
+  "readme_path": "README.md",
+  "reports_dir": "docs/daily_reports",
+  "model": "gpt-4.1-mini",
+  "max_diff_chars": 120000,
+  "max_report_chars": 180000,
+  "azure_deployment": "gpt-4.1-mini",
+  "azure_api_version": "2024-10-21"
+}
